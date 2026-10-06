@@ -1,0 +1,32 @@
+{
+  "name": "explainers",
+  "private": true,
+  "type": "module",
+  "description": "Narrated explainer videos (Remotion + Kokoro). One shared toolchain, one folder per video.",
+  "scripts": {
+    "new": "node scripts/new.mjs",
+    "tts": "node scripts/tts.mjs",
+    "capture": "node scripts/capture.mjs",
+    "check": "node scripts/check.mjs",
+    "stills": "node scripts/stills.mjs",
+    "studio": "node scripts/studio.mjs",
+    "render": "node scripts/render.mjs",
+    "clean": "node scripts/clean.mjs"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.532",
+    "@remotion/cli": "4.0.532",
+    "@remotion/google-fonts": "4.0.532",
+    "@remotion/renderer": "4.0.532",
+    "@remotion/transitions": "4.0.532",
+    "kokoro-js": "^1.2.1",
+    "playwright": "^1.63.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "remotion": "4.0.532"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}

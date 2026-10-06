@@ -1,0 +1,5 @@
+[
+  { "id": "title", "text": "Replace this with the hook: what the post is about, and why it matters." },
+  { "id": "point", "text": "Each scene gets one paragraph of narration. Animations reveal when the narrator reaches a keyword, like this one, and this final one." },
+  { "id": "outro", "text": "Close with the takeaways, and where to read the full post." }
+]

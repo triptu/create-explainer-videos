@@ -1,0 +1,6 @@
+node_modules
+node_modules.nosync/
+# your videos stay local (or in their own private repo); only the toolchain is shared
+videos/*
+!videos/.gitkeep
+.DS_Store
