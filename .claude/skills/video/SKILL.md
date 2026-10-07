@@ -58,6 +58,9 @@ and where a reviewer should look.
 Write narration for the ear, in your own words. Keep exact numbers, names and quotes from the
 source, and never invent metrics. If you simplify, stay truthful.
 
+Voice: Kokoro by default. If the user wants a more natural voice, or `.env` has `OPENROUTER_API_KEY`, use
+Gemini TTS (CLAUDE.md, "Voices").
+
 ## 3. Make it visual
 
 - **Real artifacts first:** the source's own figures and recordings, actual UI (screenshots or

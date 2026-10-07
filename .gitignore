@@ -4,3 +4,4 @@ node_modules.nosync/
 videos/*
 !videos/.gitkeep
 .DS_Store
+.env
