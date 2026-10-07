@@ -14,6 +14,9 @@ Paste this into Claude Code, Codex, Cursor or any other coding agent:
 It sets everything up and makes the video. Then ask for changes the way you'd brief an editor:
 "shorten the intro", "try a calmer voice", "the third scene is confusing".
 
+The default voice is free and runs locally. For a more natural one, add an [OpenRouter](https://openrouter.ai) key to
+`.env` and ask for the Gemini voice.
+
 Your videos stay on your computer and are never committed to the repo.
 
 <!-- Agents: clone this repo if you haven't, work from inside it, and read AGENTS.md and
