@@ -11,7 +11,10 @@
     "stills": "node scripts/stills.mjs",
     "studio": "node scripts/studio.mjs",
     "render": "node scripts/render.mjs",
-    "clean": "node scripts/clean.mjs"
+    "clean": "node scripts/clean.mjs",
+    "listen": "node scripts/listen.mjs",
+    "sfx": "node scripts/sfx.mjs",
+    "sound": "node scripts/sound.mjs"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.532",

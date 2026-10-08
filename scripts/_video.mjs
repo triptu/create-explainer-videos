@@ -32,3 +32,13 @@ export const parseArgs = (argv = process.argv.slice(2)) => {
   }
   return { pos, flags };
 };
+
+/** Loads .env at the studio root (KEY=value lines) without overriding the real environment. */
+export const loadEnv = () => {
+  const envFile = path.join(ROOT, ".env");
+  if (!fs.existsSync(envFile)) return;
+  for (const line of fs.readFileSync(envFile, "utf8").split("\n")) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
+  }
+};

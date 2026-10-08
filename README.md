@@ -17,6 +17,10 @@ It sets everything up and makes the video. Then ask for changes the way you'd br
 The default voice is free and runs locally. For a more natural one, add an [OpenRouter](https://openrouter.ai) key to
 `.env` and ask for the Gemini voice.
 
+Two styles: clean slide-style explainers, or an animated story (think Kurzgesagt) with a little robot host,
+music and sound design, and an optional two-voice conversation for dense topics. Ask for whichever you want.
+The animated style uses the OpenRouter key below for its voices and music.
+
 Your videos stay on your computer and are never committed to the repo.
 
 <!-- Agents: clone this repo if you haven't, work from inside it, and read AGENTS.md and

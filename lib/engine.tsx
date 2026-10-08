@@ -7,26 +7,85 @@ import { TransitionSeries, linearTiming } from "@remotion/transitions";
 import { fade } from "@remotion/transitions/fade";
 
 export type Scene = { id: string; section: string; title?: string; C: React.FC };
-export type VoEntry = { id: string; dur: number; text: string };
+/** One spoken line in a dialogue scene: who says it and when (seconds into the scene's audio). */
+export type VoLine = { who: string; text: string; start: number; end: number };
+/**
+ * vo.json entry. `marks` are [charIndex, seconds] sync points (sentence starts, line starts) measured
+ * from the audio by tts, over the plain text (style tags stripped). `lines` only for dialogue scenes.
+ */
+export type VoEntry = { id: string; dur: number; text: string; marks?: number[][]; lines?: VoLine[]; env?: string };
 export type ShellProps = { section: string; title?: string; index: number; count: number; children: React.ReactNode };
 export type Timing = { fps: number; lead: number; tail: number; fade: number; width: number; height: number };
 export type Props = { only: string[] };
 
 const DEFAULT_TIMING: Timing = { fps: 30, lead: 8, tail: 20, fade: 12, width: 1920, height: 1080 };
 
+/* ---------------------------------------------------------------- narration timing */
+
+/** Narration minus style tags like "[curious] " (spoken by Gemini TTS as tone, never shown or timed). */
+export const plain = (s: string) => s.replace(/\[[^\]]*\]\s*/g, "");
+
+/** Sync points (character index → frame) for one scene. Falls back to even pacing without marks. */
+export type Timeline = { text: string; frames: number; points: [number, number][]; lines: (VoLine & { from: number; to: number; i: number })[]; env?: string };
+
+export const sceneTimeline = (v: VoEntry, fps: number): Timeline => {
+  const text = plain(v.text);
+  const frames = Math.ceil(v.dur * fps);
+  const pts: [number, number][] = [[0, 0], ...(v.marks ?? []).map(([i, t]) => [i, t * fps] as [number, number]), [text.length, frames]];
+  // keep strictly increasing in both axes so interpolation never runs backwards
+  const points = pts.filter((p, k) => k === 0 || (p[0] > pts[k - 1][0] && p[1] >= pts[k - 1][1]));
+  let i = 0;
+  const lines = (v.lines ?? []).map((l) => {
+    const t = plain(l.text);
+    const line = { ...l, text: t, from: Math.round(l.start * fps), to: Math.round(l.end * fps), i };
+    i += t.length + 1;
+    return line;
+  });
+  return { text, frames, points, lines, env: v.env };
+};
+
+/**
+ * Mouth openness 0..1 at scene frame g from tts's per-frame speech envelope (undefined without one).
+ * Smoothed like hand-animated lip flap: opens fast, closes slower, and holds each shape for 4 frames, so the
+ * mouth moves about 1.5 times a second instead of jittering with every frame of loudness.
+ */
+export const loudnessAt = (tl: Timeline, g: number) => {
+  const env = tl.env;
+  if (!env) return undefined;
+  const raw = (k: number) => (k >= 0 && k < env.length ? parseInt(env[k], 36) / 35 : 0);
+  const held = g - (g % 4);
+  let s = 0;
+  for (let k = Math.max(0, held - 24); k <= held; k++) {
+    const v = raw(k);
+    s = v > s ? s + (v - s) * 0.45 : s * 0.75;
+  }
+  return s > 0.15 ? Math.min(1, s * 1.15) : 0;
+};
+
+/** Frame (within the scene) at which the narrator reaches character `i`. */
+export const frameAtChar = (tl: Timeline, i: number) => {
+  const p = tl.points;
+  let k = 1;
+  while (k < p.length - 1 && p[k][0] <= i) k++;
+  const [i0, f0] = p[k - 1], [i1, f1] = p[k];
+  return f0 + ((i - i0) / Math.max(1, i1 - i0)) * (f1 - f0);
+};
+
+/** Frame (within the scene) at which the narrator reaches `kw`. */
+export const frameOf = (tl: Timeline, kw: string, offset = 0) => {
+  const i = tl.text.indexOf(kw);
+  if (i < 0) throw new Error(`keyword not in narration: ${kw}`);
+  return Math.max(0, Math.round(frameAtChar(tl, i)) + offset);
+};
+
 /* ---------------------------------------------------------------- per-scene narration context */
 
-type Ctx = { text: string; frames: number };
-export const SceneCtx = createContext<Ctx>({ text: "", frames: 1 });
+export const SceneCtx = createContext<Timeline>({ text: "", frames: 1, points: [[0, 0], [1, 1]], lines: [] });
 
 /** Returns at(kw, offset) → frame (within the scene) at which the narrator reaches `kw`. */
 export const useAt = () => {
-  const { text, frames } = useContext(SceneCtx);
-  return (kw: string, offset = 0) => {
-    const i = text.indexOf(kw);
-    if (i < 0) throw new Error(`keyword not in narration: ${kw}`);
-    return Math.max(0, Math.round((i / text.length) * frames) + offset);
-  };
+  const tl = useContext(SceneCtx);
+  return (kw: string, offset = 0) => frameOf(tl, kw, offset);
 };
 export const useSceneFrames = () => useContext(SceneCtx).frames;
 
@@ -67,15 +126,23 @@ export const chunkCaptions = (text: string, maxWords = 11) => {
   return out;
 };
 
-/** The caption chunk being spoken right now. `prettify` maps spoken forms to written ones. */
-export const useCaption = (prettify: (s: string) => string = (s) => s, maxWords = 11) => {
-  const { text: raw, frames } = useContext(SceneCtx);
-  const f = useCurrentFrame();
+/** The caption chunk being spoken at scene frame `f`, and who says it (dialogue scenes). */
+export const captionAt = (tl: Timeline, f: number, prettify: (s: string) => string = (s) => s, maxWords = 11) => {
+  // dialogue: caption within the current line only, so speakers never share a caption
+  const line = tl.lines.length ? tl.lines[Math.max(0, tl.lines.findLastIndex((l) => l.from <= f))] : undefined;
+  const raw = line ? line.text : tl.text;
+  const base = line ? line.i : 0;
   const text = prettify(raw);
+  // chunks are found in the prettified text; map their offsets back to the raw text proportionally
+  const k = raw.length / Math.max(1, text.length);
   const chunks = chunkCaptions(text, maxWords);
-  const idx = chunks.findLastIndex((c) => (c.i / text.length) * frames <= f);
-  return chunks[Math.max(0, idx)]?.s ?? "";
+  const idx = chunks.findLastIndex((c) => frameAtChar(tl, base + c.i * k) <= f);
+  return { s: chunks[Math.max(0, idx)]?.s ?? "", who: line?.who };
 };
+
+/** The caption chunk being spoken right now. `prettify` maps spoken forms to written ones. */
+export const useCaption = (prettify: (s: string) => string = (s) => s, maxWords = 11) =>
+  captionAt(useContext(SceneCtx), useCurrentFrame(), prettify, maxWords).s;
 
 /* ---------------------------------------------------------------- composition */
 
@@ -87,7 +154,7 @@ const makePlan = (scenes: Scene[], vo: VoEntry[], t: Timing, only: string[]) => 
     .map((s, index) => {
       const v = byId[s.id];
       const voFrames = Math.ceil(v.dur * t.fps);
-      return { ...s, index, text: v.text, voFrames, frames: t.lead + voFrames + t.tail };
+      return { ...s, index, tl: sceneTimeline(v, t.fps), voFrames, frames: t.lead + voFrames + t.tail };
     })
     .filter((p) => !only.length || only.includes(p.id));
   const total = plan.reduce((a, p) => a + p.frames, 0) - t.fade * Math.max(0, plan.length - 1);
@@ -117,7 +184,7 @@ export const defineExplainer = (cfg: {
               <Sequence from={t.lead} layout="none">
                 <Audio src={staticFile(`vo/${p.id}.mp3`)} />
               </Sequence>
-              <SceneCtx.Provider value={{ text: p.text, frames: p.voFrames }}>
+              <SceneCtx.Provider value={p.tl}>
                 <Sequence from={t.lead}>
                   <Shell section={p.section} title={p.title} index={p.index} count={cfg.scenes.length}>
                     <p.C />
