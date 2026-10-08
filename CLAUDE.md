@@ -68,12 +68,20 @@ grow with the number of videos. Render a single scene while iterating; only do a
   `"tts": "google/gemini-3.8-flash-tts", "voice": "Charon"`. Other good voices: `Kore` (firm), `Puck` (upbeat);
   OpenRouter lists all 30 under the model's `supported_voices`. Leave `speed` at 1: Gemini already paces naturally.
 - Use Gemini when the user asks for a better or more natural voice, or when `.env` already has the key. Otherwise Kokoro.
+- **Directing the voice (Gemini).** Gemini reads the text strictly as a transcript, so direction never goes in the
+  words. video.json `"style"` is the narrator's persona, sent as the request's instructions. Describe a natural
+  person and register, e.g. `"A warm, clear, conversational explainer talking to a smart friend. Natural pace and
+  normal volume, relaxed and genuinely interested."` (a good default). Avoid theatrical mood words
+  ("hushed", "dramatic", "whispering"): the model overacts them. A beat or line can add a momentary `"style":
+  "a little skeptical"`. Inline, use only sparse vocal tags in angle brackets: `<short pause>`, `<long pause>`,
+  `<breath>`, `<sigh>`, `<chuckle>`, `<laugh>`. Punctuation (`...`, `--`) also shapes pacing. Never use `[square]`
+  tags with Gemini: it reads them aloud (tts converts a leading one into the line's style). tts transcribes lines
+  with tags and retries if one was spoken.
 - **Dialogue** (two voices, podcast-like; good for dense material): a narration entry can be
-  `{"id": "x", "lines": [{"who": "host", "text": "[curious] Wait, why?"}, {"who": "guide", "text": "…"}]}` with
-  `"cast": {"host": {"voice": "Puck"}, "guide": {"voice": "Charon"}}` in video.json. Mix freely with plain `text`
-  beats. The host voices the viewer's questions and doubts; the guide explains. Captions follow the speaker.
-- Leading **style tags** like `[curious]` steer Gemini's tone (captions ignore them). Gemini occasionally speaks one
-  aloud; tts checks tagged lines and retries. `--redo id1,id2` re-synthesizes specific beats.
+  `{"id": "x", "lines": [{"who": "host", "style": "curious", "text": "Wait, why?"}, {"who": "guide", "text": "…"}]}`
+  with `"cast": {"host": {"voice": "Puck", "style": "<persona>"}, "guide": {"voice": "Charon", "style": "<persona>"}}`
+  in video.json. Mix freely with plain `text` beats. The host voices the viewer's questions and doubts; the guide
+  explains. Captions follow the speaker.
 - tts also stores sync marks (so `at("kw")` lands on the spoken word) and a speech envelope for lip sync.
 - Switching engines re-synthesizes every scene (the engine is part of the cache hash). One request per scene, so
   durations change: re-run `check` and `stills` after.
@@ -127,12 +135,27 @@ Taste (what the user cares about):
   moves, a chirp when Buddy's mood changes, music ducked under the voice.
 - **Framing:** keep the ground low in the frame and text above the caption band, and size text for the zoom it will be
   seen at.
+- **Motion with physics** (adapted from Kit Langton's psychopomp `explainer-motion` skill):
+  - *Energy has a source.* Every beat moves something from a source, along a path, to where it lands. Nothing lights
+    up, flashes or moves without a cause the viewer can point to.
+  - *Quiet at rest, one focal action.* Idle things are still; motion means something is happening. Establish the
+    source, follow the signal, read the result, and keep the background still while the narrator explains.
+  - *Light is local.* Glow comes from the moving thing and falls off with distance; an arrival lights where it lands,
+    not the whole object. Keep color meaningful: one accent is the thing to follow, red is failure.
+  - *Physical easing.* Travel uses minimum-jerk easing (`smootherstep`), not a habitual cubic in-out; camera moves
+    settle like a damped spring; panels drift in with a small, damped overshoot and their content follows a beat later.
+    Flashes attack instantly and decay slowly.
+  - *Reaction follows contact.* A reply doesn't start before its request arrives; impacts land on the spoken word,
+    with a quiet sound.
+  - *Rhythm and continuity.* Stagger entrances about 120 ms apart. Transform rather than cut: the same object carries
+    across beats, the camera flies into the thing that opens. To show a fix, show the broken behavior, rewind visibly,
+    then replay the same moment resolving differently.
 
 Map of the pieces (`templates/story/world.tsx` shows them wired together):
 - `lib/story.tsx`: `defineStory`, `useStory()` → `at("beat", "keyword")` / `start` / `end` as global frames
   (validated by `check`), `useCamera(shots)` + `Stage` + `Layer depth` (parallax), `track`, `Sfx`, `useTalk(who)`
   (lip sync from the speech envelope tts stores), music/ambience cues and `dips` from video.json.
-- `lib/story-ui.tsx`: `pop`/`soft`/`lin`/`span` and `StoryOverlay` (captions with speaker chips, chapter labels).
+- `lib/story-ui.tsx`: `pop`/`soft`/`lin`/`span`, `travel`/`smootherstep` (minimum-jerk) and `StoryOverlay` (captions with speaker chips, chapter labels).
 - `lib/buddy.tsx`: `<BuddyAt x y face={moodAt(f, [[frame, "curious"], …])} talk walk look arms wave hop turn emote outfit>`.
   Moods: neutral, happy, excited, curious, thinking, confused, worried, sad, surprised, determined, proud, skeptical,
   sleepy. Outfit slots: `hat`, `neck`, `back`, `face`, `hold` (+ `color`, `color2`); see the `Outfit` type.

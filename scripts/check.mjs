@@ -13,7 +13,7 @@ const { pos } = parseArgs();
 const v = resolveVideo(pos[0]);
 // dialogue scenes ({lines}) are checked against their lines joined; style tags like [curious] don't count
 const narr = Object.fromEntries(JSON.parse(fs.readFileSync(path.join(v.dir, "narration.json"), "utf8")).map((n) => [n.id, n.text ?? n.lines.map((l) => l.text).join(" ")]));
-const plain = (s) => s.replace(/\[[^\]]*\]\s*/g, "");
+const plain = (s) => s.replace(/\[[^\]]*\]\s*|<[^>]*>\s*|\|[^|]*\|\s*/g, "").replace(/\s+([.,!?;:])/g, "$1").trim();
 const vo = fs.existsSync(path.join(v.dir, "vo.json")) ? JSON.parse(fs.readFileSync(path.join(v.dir, "vo.json"), "utf8")) : [];
 const voIds = new Set(vo.filter((e) => narr[e.id] === e.text).map((e) => e.id));
 const index = fs.readFileSync(v.entry, "utf8");

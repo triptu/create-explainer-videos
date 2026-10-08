@@ -86,7 +86,10 @@ Write narration for the ear, in your own words. Keep exact numbers, names and qu
 source, and never invent metrics. If you simplify, stay truthful.
 
 Voice: Kokoro by default. If the user wants a more natural voice, or `.env` has `OPENROUTER_API_KEY`, use
-Gemini TTS (CLAUDE.md, "Voices"). Story mode should use Gemini. For dialogue, see "3c. Write the dialogue".
+Gemini TTS (CLAUDE.md, "Voices"). Story mode should use Gemini. Direct the voice like casting a person, not
+painting a mood: a natural persona ("a warm, clear, conversational explainer talking to a smart friend") gives
+lively, believable delivery; theatrical words ("hushed", "dramatic") make it overact. Keep inline pauses and breaths
+rare. For dialogue, see "3c. Write the dialogue".
 
 ## 3. Make it visual (classic)
 

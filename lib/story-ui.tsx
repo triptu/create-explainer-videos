@@ -6,6 +6,15 @@ import { useChapter, useStoryCaption } from "./story";
 
 /* ---------------------------------------------------------------- motion (global frames) */
 
+/** Minimum-jerk easing (6t⁵ − 15t⁴ + 10t³): continuous velocity and acceleration, so travel starts and lands smoothly. */
+export const smootherstep = (t: number) => {
+  const x = Math.min(1, Math.max(0, t));
+  return x * x * x * (x * (x * 6 - 15) + 10);
+};
+
+/** 0→1 between frames a and b along a minimum-jerk curve: use for things that travel from a source to a target. */
+export const travel = (f: number, a: number, b: number) => smootherstep((f - a) / Math.max(1, b - a));
+
 /** Bouncy 0→1 starting at frame `at`. */
 export const pop = (f: number, at: number, damping = 14, mass = 0.6) => spring({ frame: f - at, fps: 30, config: { damping, mass, stiffness: 140 } });
 /** Smooth 0→1 over `dur` frames starting at `at`. */

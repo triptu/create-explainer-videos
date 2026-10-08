@@ -1,8 +1,24 @@
 [
-  { "id": "hook", "text": "Open inside the world, not on the topic. Picture the idea as a place you can walk through, with one object that does the explaining." },
-  { "id": "idea", "lines": [
-    { "who": "host", "text": "[curious] Dialogue beats look like this. So who's talking now?" },
-    { "who": "guide", "text": "The guide. Buddy asks what the viewer is thinking, I explain, and every reveal lands on a keyword, like this one." }
-  ] },
-  { "id": "outro", "text": "Close by naming the real thing plainly, and where to go next." }
+  {
+    "id": "hook",
+    "text": "Open inside the world, not on the topic. Picture the idea as a place you can walk through, <short pause> with one object that does the explaining."
+  },
+  {
+    "id": "idea",
+    "lines": [
+      {
+        "who": "host",
+        "style": "curious",
+        "text": "Dialogue beats look like this. So who's talking now?"
+      },
+      {
+        "who": "guide",
+        "text": "The guide. Buddy asks what the viewer is thinking, I explain, and every reveal lands on a keyword, like this one."
+      }
+    ]
+  },
+  {
+    "id": "outro",
+    "text": "Close by naming the real thing plainly, and where to go next."
+  }
 ]

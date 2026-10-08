@@ -7,10 +7,12 @@
   "speed": 1,
   "cast": {
     "host": {
-      "voice": "Puck"
+      "voice": "Puck",
+      "style": "A curious, friendly colleague asking the questions the listener is thinking. Natural, upbeat and conversational at normal volume, never cartoonish."
     },
     "guide": {
-      "voice": "Charon"
+      "voice": "Charon",
+      "style": "A warm, clear, conversational explainer talking to a smart friend. Natural pace and normal volume, relaxed and genuinely interested."
     }
   },
   "speech": {},
@@ -29,5 +31,6 @@
     }
   ],
   "ambience": [],
-  "dips": []
+  "dips": [],
+  "style": "A warm, clear, conversational explainer talking to a smart friend. Natural pace and normal volume, relaxed and genuinely interested."
 }

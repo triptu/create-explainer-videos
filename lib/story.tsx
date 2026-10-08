@@ -137,7 +137,8 @@ export const track = (f: number, keys: [number, number][], ease: (t: number) => 
 /** A camera move that starts at frame `at` and takes `dur` frames. x/y = world point at screen center. */
 export type Shot = { at: number; x: number; y: number; zoom?: number; rot?: number; dur?: number; ease?: (t: number) => number };
 export type Cam = { x: number; y: number; zoom: number; rot: number };
-const camEase = Easing.bezier(0.6, 0, 0.3, 1);
+// minimum-jerk: the camera leaves and settles without a jolt in acceleration (cubic in-out has one mid-move)
+const camEase = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
 
 /** Camera state at frame f. Moves blend: a move starting mid-way through another continues from wherever it is. */
 export const cameraAt = (f: number, shots: Shot[], drift = 0): Cam => {
