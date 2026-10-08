@@ -6,7 +6,7 @@ import { loadFont as loadRubik } from "@remotion/google-fonts/Rubik";
 import { loadFont as loadMono } from "@remotion/google-fonts/JetBrainsMono";
 import { StoryOverlay } from "../../lib/story-ui";
 
-export { pop, soft, lin, span } from "../../lib/story-ui";
+export { pop, soft, lin, span, travel, smootherstep } from "../../lib/story-ui";
 
 const { fontFamily: sans } = loadRubik("normal", { weights: ["400", "500", "600", "700", "800"], subsets: ["latin"] });
 const { fontFamily: mono } = loadMono("normal", { weights: ["500", "700"], subsets: ["latin"] });

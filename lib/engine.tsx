@@ -22,8 +22,8 @@ const DEFAULT_TIMING: Timing = { fps: 30, lead: 8, tail: 20, fade: 12, width: 19
 
 /* ---------------------------------------------------------------- narration timing */
 
-/** Narration minus style tags like "[curious] " (spoken by Gemini TTS as tone, never shown or timed). */
-export const plain = (s: string) => s.replace(/\[[^\]]*\]\s*/g, "");
+/** Narration minus direction: [style] tags, <vocal> tags and |backchannels| are never shown or timed. */
+export const plain = (s: string) => s.replace(/\[[^\]]*\]\s*|<[^>]*>\s*|\|[^|]*\|\s*/g, "").replace(/\s+([.,!?;:])/g, "$1").trim();
 
 /** Sync points (character index → frame) for one scene. Falls back to even pacing without marks. */
 export type Timeline = { text: string; frames: number; points: [number, number][]; lines: (VoLine & { from: number; to: number; i: number })[]; env?: string };

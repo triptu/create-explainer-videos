@@ -7,10 +7,12 @@
 // Two narration shapes (mix freely):
 //   {"id": "x", "text": "…"}                                   one narrator (video.json "voice")
 //   {"id": "x", "lines": [{"who": "host", "text": "…"}, …]}     dialogue; voices from video.json "cast":
-//                                                             {"host": {"voice": "Puck"}, "guide": {"voice": "Charon"}}
-// Gemini reads leading style tags as tone, not words: "[curious] Wait, why?". Captions and at() ignore them.
-// It occasionally speaks a tag aloud instead ("Question mark. Wait, why?"), so tagged lines are transcribed after
-// synthesis and re-done (up to 3 tries) unless the speech starts with the line's real words.
+//                                                             {"host": {"voice": "Puck", "style": "…"}, "guide": {…}}
+// Direction (Gemini): video.json "style" is the narrator's persona ("A warm, clear, conversational explainer…"),
+// a cast member's "style" overrides it for that speaker, and a beat or line can add a momentary "style"
+// ("a little skeptical"). They're sent as the request's instructions, never as text. Inline, the text may carry
+// vocal tags in angle brackets: <short pause>, <long pause>, <breath>, <sigh>, <chuckle>, <laugh>. Captions and at()
+// ignore all tags. A leading "[curious]" (older scripts) is treated as the line's style.
 // Each scene also gets sync marks (sentence/line starts measured from pauses in the audio), so at("kw")
 // lands on the spoken word rather than a character-count estimate.
 // NOTE: must run as a file; kokoro's phonemizer crashes under `node -e`.
@@ -34,18 +36,24 @@ const cast = v.cfg.cast ?? {};
 const castOf = (who) => {
   const c = cast[who];
   if (!c) throw new Error(`speaker "${who}" is not in video.json "cast"`);
-  return { voice: c.voice, speed: Number(c.speed ?? speed), fx: c.fx ?? "" };
+  return { voice: c.voice, speed: Number(c.speed ?? speed), fx: c.fx ?? "", style: c.style ?? v.cfg.style ?? "" };
+};
+/** The instructions for one utterance: the speaker's persona plus this line's momentary style. */
+const direction = (persona, line) => {
+  const lead = line.text.match(/^\s*\[([^\]]+)\]/)?.[1]; // older scripts: "[curious] Wait…"
+  const moment = [line.style, lead].filter(Boolean).join(", ");
+  return [persona, moment && `In this line: ${moment}.`].filter(Boolean).join(" ");
 };
 
 /** OpenRouter /audio/speech → raw 24 kHz mono s16le PCM (Gemini TTS only returns pcm). One request per scene/line keeps prosody natural. */
-const openrouterPcm = async (text, voice, file) => {
+const openrouterPcm = async (text, voice, file, instructions = "") => {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) throw new Error("OPENROUTER_API_KEY missing (add it to .env)");
   for (let attempt = 1; ; attempt++) {
     const res = await fetch("https://openrouter.ai/api/v1/audio/speech", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: engine, input: text, voice, response_format: "pcm" }),
+      body: JSON.stringify({ model: engine, input: text, voice, response_format: "pcm", ...(instructions ? { instructions } : {}) }),
     });
     if (res.ok) {
       const rate = Number((res.headers.get("content-type") ?? "").match(/rate=(\d+)/)?.[1] ?? 24000);
@@ -59,7 +67,10 @@ const openrouterPcm = async (text, voice, file) => {
 // video.json "speech": { "regex": "replacement" } — pronunciation fixes; captions keep the written form.
 const speech = Object.entries(v.cfg.speech ?? {}).map(([re, to]) => [new RegExp(re, "g"), to]);
 const forSpeech = (s) => speech.reduce((acc, [re, to]) => acc.replace(re, to), s);
-const plain = (s) => s.replace(/\[[^\]]*\]\s*/g, "");
+// captions/sync text: no [style] tags, <vocal> tags or |backchannels|
+const plain = (s) => s.replace(/\[[^\]]*\]\s*|<[^>]*>\s*|\|[^|]*\|\s*/g, "").replace(/\s+([.,!?;:])/g, "$1").trim();
+// what the voice gets: square-bracket tags removed (they'd be read aloud), vocal tags kept
+const forVoice = (s) => s.replace(/\[[^\]]*\]\s*/g, "").trim();
 const sentenceStarts = (s) => [...s.matchAll(/\S.*?(?:[.!?:](?=\s|$)|$)/g)].filter((m) => m[0]).map((m) => m.index);
 
 const narration = JSON.parse(fs.readFileSync(path.join(v.dir, "narration.json"), "utf8"));
@@ -88,12 +99,12 @@ const ff = (...args) => execFileSync("ffmpeg", ["-y", "-loglevel", "error", ...a
 const duration = (f) => parseFloat(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f]).toString());
 
 /** One utterance → loudness-normalized 44.1 kHz mono wav with edge silence trimmed. */
-const synth = async (spoken, { voice, speed, fx }, out) => {
+const synth = async (spoken, { voice, speed, fx, instructions = "" }, out) => {
   const trim = "silenceremove=start_periods=1:start_threshold=-50dB,areverse,silenceremove=start_periods=1:start_threshold=-50dB,areverse";
   const tail = [fx, "loudnorm=I=-16:TP=-1.5:LRA=11"].filter(Boolean).join(",");
   if (!kokoro) {
     const pcm = out + ".pcm";
-    const rate = await openrouterPcm(spoken, voice, pcm);
+    const rate = await openrouterPcm(spoken, voice, pcm, instructions);
     const tempo = speed === 1 ? "" : `atempo=${speed},`;
     ff("-f", "s16le", "-ar", String(rate), "-ac", "1", "-i", pcm, "-af", `${tempo}${trim},${tail}`, "-ar", "44100", "-ac", "1", out);
     fs.rmSync(pcm);
@@ -131,7 +142,17 @@ const transcribe = async (file) => {
   return (await res.json()).choices?.[0]?.message?.content ?? null;
 };
 const words = (s) => s.toLowerCase().replace(/[^a-z0-9' ]+/g, " ").split(/\s+/).filter(Boolean);
-/** True if the transcript starts with the line's first words (i.e. no style tag was read aloud). */
+/** True if no tag or instruction was read aloud: the speech starts with the line's words, and no vocal tag's name
+ *  ("short pause", "chuckle") shows up as words. */
+const spokenClean = (transcript, line) => {
+  const heardText = words(transcript).join(" ");
+  const said = words(plain(line)).join(" ");
+  const tagSpoken = [...line.matchAll(/<([^>]+)>/g)].some((m) => {
+    const t = words(m[1]).join(" ");
+    return t && heardText.includes(t) && !said.includes(t);
+  });
+  return !tagSpoken && startsRight(transcript, line);
+};
 const startsRight = (transcript, line) => {
   const heard = words(transcript);
   while (/^(hmm+|mm+|oh|ah|uh|um)$/.test(heard[0] ?? "")) heard.shift(); // a natural interjection is fine
@@ -194,8 +215,8 @@ for (const s of narration) {
   const lines = s.lines ?? null;
   const text = lines ? lines.map((l) => l.text).join(" ") : s.text;
   const key = lines
-    ? [engine, lines.map((l) => [l.who, forSpeech(l.text), castOf(l.who)]), gap]
-    : kokoro ? [forSpeech(s.text), voice, speed, pause] : [engine, forSpeech(s.text), voice, speed];
+    ? [engine, lines.map((l) => [l.who, forSpeech(l.text), castOf(l.who), l.style ?? ""]), gap]
+    : kokoro ? [forSpeech(s.text), voice, speed, pause] : [engine, forSpeech(s.text), voice, speed, v.cfg.style ?? "", s.style ?? ""];
   const hash = crypto.createHash("sha1").update(JSON.stringify(key)).digest("hex").slice(0, 12);
   const cached = prev[s.id];
   const redo = String(flags.redo ?? "").split(",").includes(s.id);
@@ -207,19 +228,21 @@ for (const s of narration) {
     continue;
   }
 
-  const segs = lines ?? [{ who: null, text: s.text }];
+  const segs = lines ?? [{ who: null, text: s.text, style: s.style }];
   const files = [];
   for (const [k, l] of segs.entries()) {
     const f = path.join(outDir, `${s.id}.${k}.wav`);
-    const tagged = !kokoro && /\[[^\]]*\]/.test(l.text);
+    const who = l.who ? castOf(l.who) : { voice, speed, fx: "", style: v.cfg.style ?? "" };
+    const instructions = kokoro ? "" : direction(who.style, l);
+    const checked = !kokoro && /<[^>]+>|\[[^\]]+\]/.test(l.text);
     for (let attempt = 1; ; attempt++) {
-      // after 3 tries with the tag spoken aloud, drop the tag: right words matter more than the tone hint
-      const text = attempt <= 3 ? l.text : plain(l.text);
-      await synth(forSpeech(text), l.who ? castOf(l.who) : { voice, speed, fx: "" }, f);
-      if (!tagged || attempt > 3) break;
+      // after 3 tries with a tag spoken aloud, drop the inline tags: right words matter more than the effect
+      const text = attempt <= 3 ? forVoice(l.text) : plain(l.text);
+      await synth(forSpeech(text), { ...who, instructions }, f);
+      if (!checked || attempt > 3) break;
       const heard = await transcribe(f);
-      if (heard === null || startsRight(heard, l.text)) break;
-      console.log(`  ${s.id}: tag spoken aloud ("${heard.slice(0, 40)}…")${attempt === 3 ? ", dropping the tag" : ", retrying"}`);
+      if (heard === null || spokenClean(heard, l.text)) break;
+      console.log(`  ${s.id}: a tag was spoken aloud ("${heard.slice(0, 50)}…")${attempt === 3 ? ", dropping inline tags" : ", retrying"}`);
     }
     files.push(f);
   }
