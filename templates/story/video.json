@@ -1,0 +1,33 @@
+{
+  "title": "",
+  "source": "",
+  "mode": "story",
+  "tts": "google/gemini-3.8-flash-tts",
+  "voice": "Charon",
+  "speed": 1,
+  "cast": {
+    "host": {
+      "voice": "Puck"
+    },
+    "guide": {
+      "voice": "Charon"
+    }
+  },
+  "speech": {},
+  "timing": {
+    "lead": 6,
+    "tail": 12
+  },
+  "musicStyle": "Describe the score for THIS world: instruments, mood, tempo. (Kurzgesagt / 3Blue1Brown-style beds work well: soft synths, plucks, mallets, no vocals.)",
+  "music": [
+    {
+      "id": "main",
+      "from": "hook",
+      "to": "outro",
+      "prompt": "One evolving cue: curious opening, gentle momentum in the middle, a warm resolved ending.",
+      "volume": 0.2
+    }
+  ],
+  "ambience": [],
+  "dips": []
+}

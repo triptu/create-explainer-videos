@@ -275,3 +275,8 @@ export const Shell: React.FC<{
     </AbsoluteFill>
   );
 };
+
+/** Lays children out at 1720/s px wide, then scales them up by s to fill the content area. */
+export const Fit: React.FC<{ s: number; top?: number; children: React.ReactNode }> = ({ s, top = 0, children }) => (
+  <div style={{ position: "absolute", left: 0, top, width: 1720 / s, transform: `scale(${s})`, transformOrigin: "0 0" }}>{children}</div>
+);

@@ -1,6 +1,8 @@
 // One still per scene + a contact sheet, for reviewing layout without a full render.
 //   npm run stills <video> [scene ids...] [--at 0.8]   (at = fraction through each scene's narration)
-// Writes videos/<slug>/stills/<id>.png and stills/sheet.png.
+//   --at 0.2,0.6,0.95 takes several stills per scene (one sheet row per scene): useful for story mode,
+//   where a beat's picture changes a lot as it plays.
+// Writes videos/<slug>/stills/<id>.png (or <id>@<at>.png) and stills/sheet.png.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -12,8 +14,10 @@ import { resolveVideo, parseArgs } from "./_video.mjs";
 const { pos, flags } = parseArgs();
 const v = resolveVideo(pos[0]);
 const only = pos.slice(1);
-const at = Number(flags.at ?? 0.8);
-const t = { fps: 30, lead: 8, tail: 20, fade: 12, ...v.cfg.timing };
+const ats = String(flags.at ?? 0.8).split(",").map(Number);
+const story = v.cfg.mode === "story";
+// story mode has no crossfades between beats (one continuous world)
+const t = story ? { fps: 30, lead: 6, tail: 14, ...v.cfg.timing, fade: 0 } : { fps: 30, lead: 8, tail: 20, fade: 12, ...v.cfg.timing };
 const vo = JSON.parse(fs.readFileSync(path.join(v.dir, "vo.json"), "utf8"));
 const order = JSON.parse(fs.readFileSync(path.join(v.dir, "narration.json"), "utf8")).map((n) => n.id);
 const outDir = path.join(v.dir, "stills");
@@ -27,17 +31,21 @@ const made = [];
 for (const id of order) {
   const vf = Math.ceil(byId[id].dur * t.fps);
   if (!only.length || only.includes(id)) {
-    const output = path.join(outDir, `${id}.png`);
-    await renderStill({ serveUrl, composition, frame: start + t.lead + Math.round(vf * at), output, imageFormat: "png", scale: 0.5, inputProps: { only: [] } });
-    made.push(output);
-    process.stdout.write(".");
+    for (const at of ats) {
+      const output = path.join(outDir, ats.length > 1 ? `${id}@${at}.png` : `${id}.png`);
+      await renderStill({ serveUrl, composition, frame: Math.min(composition.durationInFrames - 1, start + t.lead + Math.round(vf * at)), output, imageFormat: "png", scale: 0.5, inputProps: { only: [] } });
+      made.push(output);
+      process.stdout.write(".");
+    }
   }
   start += t.lead + vf + t.tail - t.fade;
 }
-// contact sheet, 3 per row
+// contact sheet, 3 per row (or one row per scene with several --at values)
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "sheet-"));
 made.forEach((f, i) => fs.copyFileSync(f, path.join(tmp, `${String(i).padStart(3, "0")}.png`)));
-const rows = Math.ceil(made.length / 3);
-execFileSync("ffmpeg", ["-v", "error", "-y", "-i", path.join(tmp, "%03d.png"), "-vf", `scale=640:-1,tile=3x${rows}:padding=6:color=gray`, "-frames:v", "1", path.join(outDir, "sheet.png")]);
+const cols = ats.length > 1 ? ats.length : 3;
+const rows = Math.ceil(made.length / cols);
+// -reinit_filter 0: PNG stills can differ in pixel format, and a filter-graph rebuild would reset the tile
+execFileSync("ffmpeg", ["-v", "error", "-y", "-reinit_filter", "0", "-i", path.join(tmp, "%03d.png"), "-vf", `format=rgb24,scale=640:-1,tile=${cols}x${rows}:padding=6:color=gray`, "-frames:v", "1", "-update", "1", path.join(outDir, "sheet.png")]);
 fs.rmSync(tmp, { recursive: true });
 console.log(`\n✓ ${made.length} stills → ${path.join(outDir, "sheet.png")}`);
